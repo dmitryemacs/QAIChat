@@ -26,6 +26,8 @@
 #include <QSettings> // Для сохранения/загрузки настроек
 #include <QAction>   // Для пункта меню "Настройки"
 #include <QFont>     // Для работы со шрифтами
+#include <QClipboard> // Для работы с буфером обмена (нужен для будущей кнопки копирования)
+
 
 #include "SyntaxHighlighter.h"
 #include "settingsdialog.h" // Включаем новый диалог настроек
@@ -84,4 +86,6 @@ private:
     const QString OPENROUTER_API_KEY = "";
     const QString OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 };
+
 #endif // MAINWINDOW_H
+
