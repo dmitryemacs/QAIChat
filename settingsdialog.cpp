@@ -1,4 +1,11 @@
 #include "settingsdialog.h"
+#include <QLabel>
+#include <QSpinBox>
+#include <QFontComboBox>
+#include <QDialogButtonBox>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QComboBox> // Добавлено, если ранее отсутствовало
 
 SettingsDialog::SettingsDialog(const QFont &currentFont, int currentFontSize, const QString &currentTheme, QWidget *parent)
     : QDialog(parent)
