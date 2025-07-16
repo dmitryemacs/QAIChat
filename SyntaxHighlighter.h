@@ -1,3 +1,4 @@
+#ifndef SYNTAXHIGHLIGH_H
 #define SYNTAXHIGHLIGH_H
 
 #include <QSyntaxHighlighter>
@@ -58,6 +59,11 @@ private:
     QRegularExpression codeBlockStartPython;
     QRegularExpression codeBlockStartCpp;
     QRegularExpression codeBlockStartJson;
-    QRegularExpression codeBlockStartUnknown; // Для ``` без указания языка
-    QRegularExpression codeBlockEnd;
+    QRegularExpression codeBlockStartUnknown; // Для случаев, когда указан неизвестный язык или ``` без языка
+    QRegularExpression codeBlockEnd;          // Для закрывающего маркера ```
+
+    // Приватный метод для применения правил подсветки к тексту в зависимости от текущего состояния блока.
+    void applyHighlightingRules(const QString &text, int offset, BlockState languageState);
 };
+
+#endif // SYNTAXHIGHLIGH_H
