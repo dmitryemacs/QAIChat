@@ -3,7 +3,7 @@
 
 #include <QMainWindow>
 #include <QNetworkAccessManager>
-#include <QNetworkReply>
+#include <QNetworkReply> // Включить QNetworkReply
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -23,16 +23,14 @@
 #include <QHoverEvent>
 #include <QCursor>
 #include <QTextOption>
-#include <QSettings> // Для сохранения/загрузки настроек
-#include <QAction>   // Для пункта меню "Настройки"
-#include <QFont>     // Для работы со шрифтами
-#include <QClipboard> // Для работы с буфером обмена (нужен для будущей кнопки копирования)
-
+#include <QSettings>
+#include <QAction>
+#include <QFont>
+#include <QClipboard>
 
 #include "SyntaxHighlighter.h"
-#include "settingsdialog.h" // Включаем новый диалог настроек
+#include "settingsdialog.h"
 
-// Структура для хранения данных о модели
 struct ModelData {
     QString id;
     QString description;
@@ -48,19 +46,24 @@ public:
 
 private slots:
     void sendMessage();
-    void onNetworkReply(QNetworkReply *reply);
     void showModelInfo();
-    void openSettings(); // Новый слот для открытия настроек
+    void openSettings();
+    void startNewChat();
+    void copyCodeBlock();
+    void onCustomContextMenuRequested(const QPoint &pos);
+
+    // НОВЫЕ СЛОТЫ ДЛЯ СТРИМИНГА
+    void onStreamReadyRead(); // Обработка входящих данных по мере их поступления
+    void onStreamFinished();  // Обработка завершения стриминга
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
-    void loadSettings();   // Новый метод для загрузки настроек
-    void saveSettings();   // Новый метод для сохранения настроек
-    void applyTheme(const QString &theme); // Новый метод для применения темы
+    void loadSettings();
+    void saveSettings();
+    void applyTheme(const QString &theme);
 
-    // SYSTEM INFO
     QString getSystemInfo();
     QString systemInfoContext;
 
@@ -76,16 +79,22 @@ private:
     QTimer *hoverTimer;
     QModelIndex lastHoveredIndex;
 
-    QAction *settingsAction; // Действие для пункта меню "Настройки"
+    QAction *settingsAction;
+    QAction *copyCodeAction;
+    QAction *newChatAction;
 
-    // Переменные для хранения текущих настроек
     QFont currentChatFont;
     int currentChatFontSize;
     QString currentTheme;
+
+    QString lastHoveredCodeBlockContent;
+
+    QNetworkReply *currentReply = nullptr; // НОВОЕ: Указатель на текущий QNetworkReply для стриминга
+    QString replyBuffer; // НОВОЕ: Буфер для накопления частичных данных SSE
+    bool firstChunkReceived = false; // НОВОЕ: Флаг для первого полученного фрагмента (чтобы удалить "AI печатает...")
 
     const QString OPENROUTER_API_KEY = "";
     const QString OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 };
 
 #endif // MAINWINDOW_H
-

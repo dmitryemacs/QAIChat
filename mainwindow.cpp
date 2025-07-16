@@ -3,27 +3,25 @@
 #include <QTextOption>
 #include <QListView>
 #include <QDebug>
-#include <QMenuBar> // Для использования QMenuBar
-#include <QApplication> // Для установки глобального стиля QApplication::setStyleSheet()
+#include <QMenuBar>
+#include <QApplication>
+#include <QMenu>
 
-// system info
 #include <QCoreApplication>
-#include <QDebug>
 #include <QSysInfo>
 #include <QProcess>
 #include <QThread>
-#include <QDateTime> // Для системной информации
-#include <QDir> // Для информации о диске
-#include <QStorageInfo> // Для информации о диске
-#include <QClipboard> // Включен из mainwindow.h
+#include <QDateTime>
+#include <QDir>
+#include <QStorageInfo>
+#include <QClipboard>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-
     QString systemInfo = getSystemInfo();
+    setMinimumSize(800,400);
 
-    // Настройка UI
     QWidget *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
@@ -32,89 +30,89 @@ MainWindow::MainWindow(QWidget *parent)
     chatDisplay = new QTextEdit(this);
     chatDisplay->setReadOnly(true);
     chatDisplay->setAcceptRichText(true);
+    chatDisplay->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(chatDisplay, &QTextEdit::customContextMenuRequested, this, &MainWindow::onCustomContextMenuRequested);
 
-    // chatDisplay->append("<b style='color: #9b59b6;'>Информация о системе:</b><pre>" + systemInfo + "</pre>");
     this->systemInfoContext = systemInfo;
 
-    // Шрифты и размер будут установлены методом loadSettings()
-
     QTextOption textOption = chatDisplay->document()->defaultTextOption();
-
-    textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere); // Переносить в любом месте
+    textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
     chatDisplay->document()->setDefaultTextOption(textOption);
 
-    codeHighlighter = new CodeHighlighter(chatDisplay->document()); // Инициализируем подсветку синтаксиса
+    codeHighlighter = new CodeHighlighter(chatDisplay->document());
 
-    // Ввод сообщения
     messageInput = new QLineEdit(this);
     sendButton = new QPushButton("Отправить", this);
     modelSelector = new QComboBox(this);
 
-    // Инициализация моделей
-    availableModels["gpt-4o"] = {"gpt-4o", "OpenAI GPT-4o (лучшая)"};
-    availableModels["mistral/mistral-7b-instruct"] = {"mistral/mistral-7b-instruct", "Mistral 7B Instruct (хорошая)"};
-    availableModels["google/gemini-flash-1.5"] = {"google/gemini-flash-1.5", "Google Gemini Flash 1.5 (быстрая)"};
-    availableModels["microsoft/phi-3-mini-4k-instruct"] = {"microsoft/phi-3-mini-4k-instruct", "Microsoft Phi-3 Mini 4K Instruct (компактная)"};
-    availableModels["meta-llama/llama-3-8b-instruct"] = {"meta-llama/llama-3-8b-instruct", "Llama 3 8B Instruct (базовая)"};
-    availableModels["nousresearch/nous-hermes-2-mixtral-8x7b-dpo"] = {"nousresearch/nous-hermes-2-mixtral-8x7b-dpo", "Nous Hermes 2 Mixtral 8x7B (мощная)"};
-    availableModels["deepseek-ai/deepseek-coder-6.7b-instruct"] = {"deepseek-ai/deepseek-coder-6.7b-instruct", "DeepSeek Coder 6.7B Instruct (код)"};
-    availableModels["qwen/qwen-14b-chat"] = {"qwen/qwen-14b-chat", "Qwen 14B Chat (многоязычная)"};
-    availableModels["mistralai/mistral-nemo:free"] = {"mistralai/mistral-nemo:free", "Mixtral Nemo (универсальная)"};
-    availableModels["google/gemma-7b-it"] = {"google/gemma-7b-it", "Google Gemma 7B IT (легкая)"};
+    availableModels["mistralai/devstral-small-2505:free"] = {"mistralai/devstral-small-2505:free", "Mistral: Devstral"};
+    availableModels["qwen/qwen3-235b-a22b"] = {"qwen/qwen3-235b-a22b", "Qwen: Qwen3 235B A22B"};
+    availableModels["deepseek/deepseek-r1-0528:free"] = {"deepseek/deepseek-r1-0528:free", "DeepSeek: R1 0528"};
+    availableModels["google/gemini-2.0-flash-exp:free"] = {"google/gemini-2.0-flash-exp:free", "Google: Gemini 2.5 Flash"};
+    availableModels["mistralai/mistral-nemo:free"] = {"mistralai/mistral-nemo:free", "Mistral: Mistral Nemo"};
+    availableModels["qwen/qwq-32b:free"] = {"qwen/qwq-32b:free", "Qwen: QwQ 32B"};
+    availableModels["meta-llama/llama-3.3-70b-instruct:free"] = {"meta-llama/llama-3.3-70b-instruct:free", "Meta: Llama 3.3 70B"};
+    availableModels["google/gemma-3-12b-it:free"] = {"google/gemma-3-12b-it:free", "Google: Gemma 3"};
+    availableModels["meta-llama/llama-3.1-405b-instruct:free"] = {"meta-llama/llama-3.1-405b-instruct:free", "Meta: Llama 3.1 405B"};
+    availableModels["mistralai/mistral-small-24b-instruct-2501:free"] = {"mistralai/mistral-small-24b-instruct-2501:free", "Mistral: Mistral Small"};
 
-
-    // Добавляем модели в QComboBox
     for (const auto& model : availableModels) {
         modelSelector->addItem(model.description, model.id);
     }
 
-    // Устанавливаем ширину выпадающего списка
-    modelSelector->view()->setMinimumWidth(modelSelector->minimumSizeHint().width() + 50); // Добавляем отступ
+    modelSelector->view()->setMinimumWidth(modelSelector->minimumSizeHint().width() + 50);
 
-    // Подсказки для моделей
     hoverTimer = new QTimer(this);
-    hoverTimer->setInterval(300); // Задержка 300 мс
+    hoverTimer->setInterval(300);
     connect(hoverTimer, &QTimer::timeout, this, &MainWindow::showModelInfo);
     modelSelector->view()->installEventFilter(this);
 
-
     networkManager = new QNetworkAccessManager(this);
 
-    // Соединения
     connect(sendButton, &QPushButton::clicked, this, &MainWindow::sendMessage);
-    connect(messageInput, &QLineEdit::returnPressed, this, &MainWindow::sendMessage); // Отправка по Enter
-    connect(networkManager, &QNetworkAccessManager::finished, this, &MainWindow::onNetworkReply);
+    connect(messageInput, &QLineEdit::returnPressed, this, &MainWindow::sendMessage);
+    // Отключаем старое соединение, так как будем использовать стриминг для ответов AI
+    // connect(networkManager, &QNetworkAccessManager::finished, this, &MainWindow::onNetworkReply);
 
-    // Размещение элементов
     QHBoxLayout *inputLayout = new QHBoxLayout();
     inputLayout->addWidget(messageInput);
     inputLayout->addWidget(sendButton);
 
+    QHBoxLayout *topButtonsLayout = new QHBoxLayout();
+    topButtonsLayout->addWidget(modelSelector);
+
     mainLayout->addWidget(chatDisplay);
-    mainLayout->addWidget(modelSelector);
+    mainLayout->addLayout(topButtonsLayout);
     mainLayout->addLayout(inputLayout);
 
-    // Меню
     QMenuBar *menuBar = new QMenuBar(this);
     QMenu *fileMenu = menuBar->addMenu("Файл");
+
+    newChatAction = fileMenu->addAction("Новый чат");
+    connect(newChatAction, &QAction::triggered, this, &MainWindow::startNewChat);
+
     settingsAction = fileMenu->addAction("Настройки");
     connect(settingsAction, &QAction::triggered, this, &MainWindow::openSettings);
     fileMenu->addAction("Выход", this, &QApplication::quit);
     setMenuBar(menuBar);
 
-    // Загружаем настройки при старте
-    loadSettings();
+    copyCodeAction = new QAction("Копировать блок кода", this);
+    connect(copyCodeAction, &QAction::triggered, this, &MainWindow::copyCodeBlock);
 
-    // Применяем тему после загрузки настроек
+    loadSettings();
     applyTheme(currentTheme);
 
-    // Приветствие
     chatDisplay->append("<b style='color: #27ae60;'>AI:</b> Привет! Чем могу помочь сегодня?");
 }
 
 MainWindow::~MainWindow()
 {
-    saveSettings(); // Сохраняем настройки при закрытии
+    // Убедитесь, что reply удаляется при закрытии, если оно все еще активно
+    if (currentReply) {
+        currentReply->abort(); // Прервать текущий запрос
+        currentReply->deleteLater();
+    }
+    saveSettings();
 }
 
 void MainWindow::sendMessage()
@@ -126,17 +124,35 @@ void MainWindow::sendMessage()
     chatDisplay->append("<b style='color: #3498db;'>Вы:</b> " + message);
     messageInput->clear();
 
-    // Добавляем "AI печатает..."
+    // Удаляем старую надпись "AI печатает..." если она осталась
+    QTextCursor cursor = chatDisplay->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    cursor.select(QTextCursor::BlockUnderCursor);
+    QString lastBlockText = cursor.selectedText();
+    if (lastBlockText.trimmed() == "AI печатает...") {
+        cursor.removeSelectedText();
+        if (cursor.positionInBlock() == 0 && cursor.blockNumber() > 0) {
+            cursor.deletePreviousChar(); // Удалить лишний перенос строки
+        }
+    }
+
+
     chatDisplay->append("AI печатает...");
-    chatDisplay->repaint(); // Обновляем, чтобы сразу показать
+    chatDisplay->repaint(); // Обновляем отображение сразу
+
+    // Деактивируем ввод и кнопку отправки, пока идет ответ
+    messageInput->setEnabled(false);
+    sendButton->setEnabled(false);
+
+    firstChunkReceived = false; // Сбрасываем флаг для нового ответа
 
     QString selectedModelId = modelSelector->currentData().toString();
-    QUrl url("https://openrouter.ai/api/v1/chat/completions");
+    QUrl url(OPENROUTER_API_URL); // Используем константу OPENROUTER_API_URL
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("Authorization", ("Bearer " + OPENROUTER_API_KEY).toUtf8());
-    request.setRawHeader("HTTP-Referer", "https://github.com/maksimb/AIAssistant"); // Замените на домен вашего приложения
-    request.setRawHeader("X-Title", "AI Assistant Qt App"); // Замените на название вашего приложения
+    request.setRawHeader("HTTP-Referer", "https://github.com/maksimb/AIAssistant");
+    request.setRawHeader("X-Title", "AI Assistant Qt App");
 
     QJsonObject messageUser;
     messageUser["role"] = "user";
@@ -144,7 +160,7 @@ void MainWindow::sendMessage()
 
     QJsonObject messageSystem;
     messageSystem["role"] = "system";
-    messageSystem["content"] = systemInfoContext; // Добавляем системную информацию как контекст
+    messageSystem["content"] = systemInfoContext;
 
     QJsonArray messages;
     messages.append(messageSystem);
@@ -153,88 +169,138 @@ void MainWindow::sendMessage()
     QJsonObject requestBody;
     requestBody["model"] = selectedModelId;
     requestBody["messages"] = messages;
+    requestBody["stream"] = true; // ВАЖНО: Включаем стриминг
 
     QJsonDocument doc(requestBody);
-    networkManager->post(request, doc.toJson());
-}
 
-void MainWindow::onNetworkReply(QNetworkReply *reply)
-{
-    // Удаляем "AI печатает..."
-    if (chatDisplay->toPlainText().endsWith("AI печатает...\n")) {
-        QTextCursor cursor = chatDisplay->textCursor();
-        cursor.movePosition(QTextCursor::End);
-        cursor.select(QTextCursor::BlockUnderCursor);
-        QString lastBlockText = cursor.selectedText();
-        if (lastBlockText.trimmed() == "AI печатает...") {
-            cursor.removeSelectedText();
-            // Также удаляем предшествующий перевод строки, если он был добавлен append
-            cursor.movePosition(QTextCursor::End);
-            if (cursor.positionInBlock() == 0 && cursor.blockNumber() > 0) {
-                cursor.deletePreviousChar(); // Удаляем перевод строки
-            }
-        }
+    // Удаляем предыдущий reply, если он есть
+    if (currentReply) {
+        currentReply->abort();
+        currentReply->deleteLater();
+        currentReply = nullptr;
     }
 
+    currentReply = networkManager->post(request, doc.toJson());
 
-    if (reply->error() == QNetworkReply::NoError) {
-        QString aiResponse = reply->readAll();
-        QJsonDocument jsonResponse = QJsonDocument::fromJson(aiResponse.toUtf8());
-        QJsonObject jsonObject = jsonResponse.object();
+    // Подключаем новые слоты для стриминга
+    connect(currentReply, &QNetworkReply::readyRead, this, &MainWindow::onStreamReadyRead);
+    connect(currentReply, &QNetworkReply::finished, this, &MainWindow::onStreamFinished);
+}
 
-        QString content = "";
-        if (jsonObject.contains("choices") && jsonObject["choices"].isArray()) {
-            QJsonArray choices = jsonObject["choices"].toArray();
-            if (!choices.isEmpty()) {
-                QJsonObject firstChoice = choices[0].toObject();
-                if (firstChoice.contains("message") && firstChoice["message"].isObject()) {
-                    QJsonObject message = firstChoice["message"].toObject();
-                    if (message.contains("content") && message["content"].isString()) {
-                        content = message["content"].toString();
+// Этот слот больше не нужен для обработки ответов AI, так как мы используем стриминг.
+// Вы можете удалить его или переиспользовать для не-стриминговых запросов, если они будут.
+// void MainWindow::onNetworkReply(QNetworkReply *reply) { ... }
+
+
+void MainWindow::onStreamReadyRead()
+{
+    if (!currentReply) return;
+
+    replyBuffer.append(currentReply->readAll());
+
+    // Process each Server-Sent Event (SSE)
+    // SSE events are delimited by two newline characters (\n\n)
+    while (replyBuffer.contains("\n\n")) {
+        int endOfEvent = replyBuffer.indexOf("\n\n");
+        QString eventData = replyBuffer.left(endOfEvent + 2); // +2 to include \n\n
+        replyBuffer.remove(0, endOfEvent + 2);
+
+        // Check for "data: " prefix
+        if (eventData.startsWith("data: ")) {
+            QString jsonString = eventData.mid(6).trimmed(); // Remove "data: " and trim whitespace
+
+            if (jsonString == "[DONE]") {
+                // End of stream
+                break; // Exit loop, finished will handle cleanup
+            }
+
+            QJsonDocument jsonResponse = QJsonDocument::fromJson(jsonString.toUtf8());
+            QJsonObject jsonObject = jsonResponse.object();
+
+            QString content = "";
+            if (jsonObject.contains("choices") && jsonObject["choices"].isArray()) {
+                QJsonArray choices = jsonObject["choices"].toArray();
+                if (!choices.isEmpty()) {
+                    QJsonObject firstChoice = choices[0].toObject();
+                    if (firstChoice.contains("delta") && firstChoice["delta"].isObject()) {
+                        QJsonObject delta = firstChoice["delta"].toObject();
+                        if (delta.contains("content") && delta["content"].isString()) {
+                            content = delta["content"].toString();
+                        }
                     }
                 }
             }
+
+            // Удаляем "AI печатает..." при первом получении контента
+            if (!firstChunkReceived && !content.isEmpty()) {
+                QTextCursor cursor = chatDisplay->textCursor();
+                cursor.movePosition(QTextCursor::End);
+                cursor.select(QTextCursor::BlockUnderCursor);
+                QString lastBlockText = cursor.selectedText();
+                if (lastBlockText.trimmed() == "AI печатает...") {
+                    cursor.removeSelectedText();
+                    if (cursor.positionInBlock() == 0 && cursor.blockNumber() > 0) {
+                        cursor.deletePreviousChar(); // Удалить лишний перенос строки
+                    }
+                }
+                chatDisplay->insertHtml("<b style='color: #27ae60;'>AI:</b> "); // Добавляем префикс "AI:"
+                firstChunkReceived = true;
+            }
+
+            // Добавляем новый контент
+            if (!content.isEmpty()) {
+                chatDisplay->insertPlainText(content);
+                // Прокручиваем до конца, чтобы видеть новый текст
+                QTextCursor tc = chatDisplay->textCursor();
+                tc.movePosition(QTextCursor::End);
+                chatDisplay->setTextCursor(tc);
+            }
         }
-
-        // ИЗМЕНЕНО: Добавляем "AI:" как отдельный блок, а затем содержимое как обычный текст.
-        // Это позволяет QSyntaxHighlighter правильно обрабатывать маркеры кода.
-        chatDisplay->append("<b style='color: #27ae60;'>AI:</b>"); // Добавляем "AI:" с цветом
-        chatDisplay->append(content); // Добавляем фактический ответ как обычный текст
-
-    } else {
-        chatDisplay->append(QString("<b style='color: red;'>Ошибка:</b> %1").arg(reply->errorString()));
-        qDebug() << "Network error:" << reply->errorString();
     }
-    reply->deleteLater();
 }
+
+
+void MainWindow::onStreamFinished()
+{
+    if (currentReply->error() != QNetworkReply::NoError) {
+        chatDisplay->append(QString("<b style='color: red;'>Ошибка:</b> %1").arg(currentReply->errorString()));
+        qDebug() << "Stream error:" << currentReply->errorString();
+    }
+    // Удаляем reply после завершения
+    currentReply->deleteLater();
+    currentReply = nullptr;
+
+    // Снова активируем ввод и кнопку отправки
+    messageInput->setEnabled(true);
+    sendButton->setEnabled(true);
+    messageInput->setFocus();
+    replyBuffer.clear(); // Очищаем буфер после завершения стриминга
+    firstChunkReceived = false; // Сбрасываем флаг
+}
+
 
 void MainWindow::showModelInfo()
 {
-    // Получаем текущий индекс элемента, над которым находится курсор
-    // ИСПРАВЛЕНО: Используем mapFromGlobal(QCursor::pos()) для получения позиции курсора в координатах виджета
     QPoint pos = modelSelector->mapFromGlobal(QCursor::pos());
     QModelIndex index = modelSelector->view()->indexAt(pos);
 
     if (index.isValid() && index != lastHoveredIndex) {
         QString modelId = index.data(Qt::UserRole).toString();
-        // Убедитесь, что 'availableModels' содержит ключ 'modelId'
         if (availableModels.contains(modelId)) {
             QToolTip::showText(QCursor::pos(), availableModels[modelId].description, modelSelector);
         }
         lastHoveredIndex = index;
     } else if (!index.isValid()) {
         QToolTip::hideText();
-        lastHoveredIndex = QModelIndex(); // Сброс, когда курсор уходит
+        lastHoveredIndex = QModelIndex();
     }
 }
-
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
     if (obj == modelSelector->view()) {
         if (event->type() == QEvent::HoverEnter || event->type() == QEvent::HoverMove) {
             QHoverEvent *hoverEvent = static_cast<QHoverEvent*>(event);
-            // ИСПРАВЛЕНО: Используем position().toPoint() для QHoverEvent::pos()
             QModelIndex currentIndex = modelSelector->view()->indexAt(hoverEvent->position().toPoint());
             if (currentIndex.isValid() && currentIndex != lastHoveredIndex) {
                 lastHoveredIndex = currentIndex;
@@ -242,13 +308,13 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 hoverTimer->start();
             } else if (!currentIndex.isValid()) {
                 hoverTimer->stop();
-                lastHoveredIndex = QModelIndex(); // Сброс
-                QToolTip::hideText(); // Hide tooltip if mouse leaves a valid item
+                lastHoveredIndex = QModelIndex();
+                QToolTip::hideText();
             }
         } else if (event->type() == QEvent::HoverLeave) {
             hoverTimer->stop();
             QToolTip::hideText();
-            lastHoveredIndex = QModelIndex(); // Сброс
+            lastHoveredIndex = QModelIndex();
         }
     }
     return QMainWindow::eventFilter(obj, event);
@@ -263,27 +329,22 @@ void MainWindow::openSettings()
         currentChatFontSize = settingsDialog.selectedFontSize();
         currentTheme = settingsDialog.selectedTheme();
 
-        // Применяем новые настройки
-        QFont newFont = currentChatFont; // Создаем новую QFont на основе сохраненной
-        newFont.setPointSize(currentChatFontSize); // Устанавливаем размер
-        chatDisplay->setFont(newFont); // Применяем ко всему QTextEdit и его документу
+        QFont newFont = currentChatFont;
+        newFont.setPointSize(currentChatFontSize);
+        chatDisplay->setFont(newFont);
 
-        // Применяем тему
         applyTheme(currentTheme);
-
-        // Сохраняем настройки
         saveSettings();
     }
 }
 
 void MainWindow::loadSettings()
 {
-    QSettings settings("YourCompanyName", "AIAssistantQtApp"); // Замените на свои данные
+    QSettings settings("YourCompanyName", "AIAssistantQtApp");
     currentChatFont = settings.value("chatFont", QFont("Arial", 10)).value<QFont>();
     currentChatFontSize = settings.value("chatFontSize", 10).toInt();
-    currentTheme = settings.value("appTheme", "dark").toString(); // По умолчанию темная тема
+    currentTheme = settings.value("appTheme", "dark").toString();
 
-    // Применяем загруженные настройки сразу
     QFont initialFont = currentChatFont;
     initialFont.setPointSize(currentChatFontSize);
     chatDisplay->setFont(initialFont);
@@ -291,7 +352,7 @@ void MainWindow::loadSettings()
 
 void MainWindow::saveSettings()
 {
-    QSettings settings("YourCompanyName", "AIAssistantQtApp"); // Замените на свои данные
+    QSettings settings("YourCompanyName", "AIAssistantQtApp");
     settings.setValue("chatFont", currentChatFont);
     settings.setValue("chatFontSize", currentChatFontSize);
     settings.setValue("appTheme", currentTheme);
@@ -302,174 +363,50 @@ void MainWindow::applyTheme(const QString &theme)
     QString styleSheet;
     if (theme == "dark") {
         styleSheet = R"(
-            QMainWindow {
-                background-color: #2e2e2e;
-                color: #ffffff;
-            }
-            QTextEdit {
-                background-color: #1e1e1e;
-                color: #ffffff;
-                border: 1px solid #3a3a3a;
-                selection-background-color: #007acc;
-            }
-            QLineEdit {
-                background-color: #3a3a3a;
-                color: #ffffff;
-                border: 1px solid #555555;
-            }
-            QPushButton {
-                background-color: #007acc;
-                color: #ffffff;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #005f99;
-            }
-            QComboBox {
-                background-color: #3a3a3a;
-                color: #ffffff;
-                border: 1px solid #555555;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: url(:/icons/down_arrow_white.png); /* Замените на путь к вашей иконке */
-            }
-            QComboBox QAbstractItemView {
-                background-color: #3a3a3a;
-                color: #ffffff;
-                selection-background-color: #007acc;
-            }
-            QLabel {
-                color: #ffffff;
-            }
-            QMenuBar {
-                background-color: #3a3a3a;
-                color: #ffffff;
-            }
-            QMenuBar::item {
-                background-color: transparent;
-                color: #ffffff;
-            }
-            QMenuBar::item:selected {
-                background-color: #007acc;
-                color: #ffffff;
-            }
-            QMenu {
-                background-color: #3a3a3a;
-                color: #ffffff;
-                border: 1px solid #555555;
-            }
-            QMenu::item:selected {
-                background-color: #007acc;
-                color: #ffffff;
-            }
-            QDialog {
-                background-color: #2e2e2e;
-                color: #ffffff;
-            }
-            QSpinBox, QFontComboBox {
-                background-color: #3a3a3a;
-                color: #ffffff;
-                border: 1px solid #555555;
-            }
-            QDialogButtonBox QPushButton {
-                background-color: #007acc;
-                color: #ffffff;
-            }
-            QDialogButtonBox QPushButton:hover {
-                background-color: #005f99;
-            }
+            QMainWindow { background-color: #2e2e2e; color: #ffffff; }
+            QTextEdit { background-color: #1e1e1e; color: #ffffff; border: 1px solid #3a3a3a; selection-background-color: #007acc; }
+            QLineEdit { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; }
+            QPushButton { background-color: #007acc; color: #ffffff; border: none; padding: 8px 16px; border-radius: 4px; }
+            QPushButton:hover { background-color: #005f99; }
+            QComboBox { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; }
+            QComboBox::drop-down { border: none; }
+            QComboBox::down-arrow { image: url(:/icons/down_arrow_white.png); }
+            QComboBox QAbstractItemView { background-color: #3a3a3a; color: #ffffff; selection-background-color: #007acc; }
+            QLabel { color: #ffffff; }
+            QMenuBar { background-color: #3a3a3a; color: #ffffff; }
+            QMenuBar::item { background-color: transparent; color: #ffffff; }
+            QMenuBar::item:selected { background-color: #007acc; color: #ffffff; }
+            QMenu { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; }
+            QMenu::item:selected { background-color: #007acc; color: #ffffff; }
+            QDialog { background-color: #2e2e2e; color: #ffffff; }
+            QSpinBox, QFontComboBox { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; }
+            QDialogButtonBox QPushButton { background-color: #007acc; color: #ffffff; }
+            QDialogButtonBox QPushButton:hover { background-color: #005f99; }
         )";
-    } else { // Светлая тема
+    } else {
         styleSheet = R"(
-            QMainWindow {
-                background-color: #f0f0f0;
-                color: #333333;
-            }
-            QTextEdit {
-                background-color: #ffffff;
-                color: #333333;
-                border: 1px solid #cccccc;
-                selection-background-color: #007bff;
-            }
-            QLineEdit {
-                background-color: #ffffff;
-                color: #333333;
-                border: 1px solid #cccccc;
-            }
-            QPushButton {
-                background-color: #007bff;
-                color: #ffffff;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #0056b3;
-            }
-            QComboBox {
-                background-color: #ffffff;
-                color: #333333;
-                border: 1px solid #cccccc;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: url(:/icons/down_arrow_black.png); /* Замените на путь к вашей иконке */
-            }
-            QComboBox QAbstractItemView {
-                background-color: #ffffff;
-                color: #333333;
-                selection-background-color: #007bff;
-            }
-            QLabel {
-                color: #333333;
-            }
-            QMenuBar {
-                background-color: #e0e0e0;
-                color: #333333;
-            }
-            QMenuBar::item {
-                background-color: transparent;
-                color: #333333;
-            }
-            QMenuBar::item:selected {
-                background-color: #007bff;
-                color: #ffffff;
-            }
-            QMenu {
-                background-color: #e0e0e0;
-                color: #333333;
-                border: 1px solid #cccccc;
-            }
-            QMenu::item:selected {
-                background-color: #007bff;
-                color: #ffffff;
-            }
-            QDialog {
-                background-color: #f0f0f0;
-                color: #333333;
-            }
-            QSpinBox, QFontComboBox {
-                background-color: #ffffff;
-                color: #333333;
-                border: 1px solid #cccccc;
-            }
-            QDialogButtonBox QPushButton {
-                background-color: #007bff;
-                color: #ffffff;
-            }
-            QDialogButtonBox QPushButton:hover {
-                background-color: #0056b3;
-            }
+            QMainWindow { background-color: #f0f0f0; color: #333333; }
+            QTextEdit { background-color: #ffffff; color: #333333; border: 1px solid #cccccc; selection-background-color: #007bff; }
+            QLineEdit { background-color: #ffffff; color: #333333; border: 1px solid #cccccc; }
+            QPushButton { background-color: #007bff; color: #ffffff; border: none; padding: 8px 16px; border-radius: 4px; }
+            QPushButton:hover { background-color: #0056b3; }
+            QComboBox { background-color: #ffffff; color: #333333; border: 1px solid #cccccc; }
+            QComboBox::drop-down { border: none; }
+            QComboBox::down-arrow { image: url(:/icons/down_arrow_black.png); }
+            QComboBox QAbstractItemView { background-color: #ffffff; color: #333333; selection-background-color: #007bff; }
+            QLabel { color: #333333; }
+            QMenuBar { background-color: #e0e0e0; color: #333333; }
+            QMenuBar::item { background-color: transparent; color: #333333; }
+            QMenuBar::item:selected { background-color: #007bff; color: #ffffff; }
+            QMenu { background-color: #e0e0e0; color: #333333; border: 1px solid #cccccc; }
+            QMenu::item:selected { background-color: #007bff; color: #ffffff; }
+            QDialog { background-color: #f0f0f0; color: #333333; }
+            QSpinBox, QFontComboBox { background-color: #ffffff; color: #333333; border: 1px solid #cccccc; }
+            QDialogButtonBox QPushButton { background-color: #007bff; color: #ffffff; }
+            QDialogButtonBox QPushButton:hover { background-color: #0056b3; }
         )";
     }
-    qApp->setStyleSheet(styleSheet); // Использование qApp для установки глобального стиля
+    qApp->setStyleSheet(styleSheet);
 }
 
 QString MainWindow::getSystemInfo()
@@ -478,14 +415,12 @@ QString MainWindow::getSystemInfo()
     info += "OS Type: " + QSysInfo::prettyProductName() + "\n";
     info += "CPU Architecture: " + QSysInfo::currentCpuArchitecture() + "\n";
 
-    // CPU Cores/Threads (Linux/macOS example, Windows needs specific WMI/registry query)
     QProcess cpuProcess;
 #ifdef Q_OS_LINUX
     cpuProcess.start("nproc --all");
 #elif defined(Q_OS_MAC)
     cpuProcess.start("sysctl -n hw.ncpu");
 #elif defined(Q_OS_WIN)
-    // For Windows, a simpler approach for logical processors
     cpuProcess.start("powershell.exe -Command \"(Get-WmiObject -class Win32_Processor).NumberOfLogicalProcessors | Measure-Object -Sum | Select -ExpandProperty Sum\"");
 #else
     cpuProcess.start("echo 'CPU info not available'");
@@ -494,14 +429,12 @@ QString MainWindow::getSystemInfo()
     QString cpuThreads = cpuProcess.readAllStandardOutput().trimmed();
     info += "CPU Threads: " + cpuThreads + "\n";
 
-    // RAM Info (Linux/macOS example, Windows needs WMI/registry query)
     QProcess ramProcess;
 #ifdef Q_OS_LINUX
     ramProcess.start("free -h | grep Mem | awk '{print $2}'");
 #elif defined(Q_OS_MAC)
     ramProcess.start("sysctl -n hw.memsize | awk '{print $1/1073741824\" GB\"}'");
 #elif defined(Q_OS_WIN)
-    // For Windows, total physical memory
     ramProcess.start("powershell.exe -Command \"(Get-WmiObject -class Win32_ComputerSystem).TotalPhysicalMemory | Foreach-Object { ($ / 1GB).ToString('N2') + ' GB' }\"");
 #else
     ramProcess.start("echo 'RAM info not available'");
@@ -510,23 +443,114 @@ QString MainWindow::getSystemInfo()
     QString ramOutput = ramProcess.readAllStandardOutput().trimmed();
     info += "Total RAM: " + ramOutput + "\n";
 
-    // Disk Space (Example for C: drive on Windows, or root on Linux/macOS)
     QProcess diskProcess;
 #ifdef Q_OS_LINUX
-    diskProcess.start("df -h / | awk 'NR==2 {print $2}'"); // Total disk space for root
+    diskProcess.start("df -h / | awk 'NR==2 {print $2}'");
 #elif defined(Q_OS_MAC)
-    diskProcess.start("df -h / | awk 'NR==2 {print $2}'"); // Total disk space for root
+    diskProcess.start("df -h / | awk 'NR==2 {print $2}'");
 #elif defined(Q_OS_WIN)
-    // For Windows, get total size of C: drive
     diskProcess.start("powershell.exe -Command \"(Get-WmiObject -Class Win32_LogicalDisk -Filter 'DriveType=3 and DeviceID=\"C:\"').Size | Foreach-Object { ($ / 1GB).ToString('N2') + ' GB' }\"");
 #else
     diskProcess.start("echo 'Disk info not available'");
 #endif
     diskProcess.waitForFinished();
     QString diskOutput = diskProcess.readAllStandardOutput().trimmed();
-    info += "Total Disk Space (C:/): " + diskOutput + "\n"; // Or root for Linux/macOS
+    info += "Total Disk Space (C:/): " + diskOutput + "\n";
 
     info += "Current Time: " + QDateTime::currentDateTime().toString(Qt::ISODate) + "\n";
 
     return info;
+}
+
+void MainWindow::startNewChat()
+{
+    chatDisplay->clear();
+    chatDisplay->append("<b style='color: #27ae60;'>AI:</b> Привет! Чем могу помочь сегодня?");
+}
+
+void MainWindow::copyCodeBlock()
+{
+    QTextCursor cursor = chatDisplay->textCursor();
+    QTextDocument *doc = chatDisplay->document();
+    int currentBlockNumber = cursor.blockNumber();
+
+    QString codeContent;
+    int startBlock = -1;
+    int endBlock = -1;
+
+    for (int i = currentBlockNumber; i >= 0; --i) {
+        QTextBlock block = doc->findBlockByNumber(i);
+        if (block.text().trimmed().startsWith("```")) {
+            startBlock = i;
+            break;
+        }
+    }
+
+    if (startBlock != -1) {
+        for (int i = startBlock + 1; i < doc->blockCount(); ++i) {
+            QTextBlock block = doc->findBlockByNumber(i);
+            if (block.text().trimmed() == "```") {
+                endBlock = i;
+                break;
+            }
+        }
+    }
+
+    if (startBlock != -1 && endBlock != -1) {
+        for (int i = startBlock + 1; i < endBlock; ++i) {
+            QTextBlock block = doc->findBlockByNumber(i);
+            codeContent += block.text() + "\n";
+        }
+        if (!codeContent.isEmpty() && codeContent.endsWith("\n")) {
+            codeContent.chop(1);
+        }
+
+        QClipboard *clipboard = QApplication::clipboard();
+        clipboard->setText(codeContent);
+        qDebug() << "Code copied to clipboard:" << codeContent;
+    } else {
+        qDebug() << "No complete code block found at cursor position.";
+    }
+}
+
+void MainWindow::onCustomContextMenuRequested(const QPoint &pos)
+{
+    QMenu menu(this);
+    menu.addAction(copyCodeAction);
+
+    QTextCursor cursor = chatDisplay->cursorForPosition(pos);
+    chatDisplay->setTextCursor(cursor);
+
+    bool isInCodeBlock = false;
+    int currentBlockNumber = cursor.blockNumber();
+    QTextDocument *doc = chatDisplay->document();
+
+    int startBlock = -1;
+    int endBlock = -1;
+
+    for (int i = currentBlockNumber; i >= 0; --i) {
+        QTextBlock block = doc->findBlockByNumber(i);
+        if (block.text().trimmed().startsWith("```")) {
+            startBlock = i;
+            break;
+        }
+    }
+
+    if (startBlock != -1) {
+        for (int i = startBlock + 1; i < doc->blockCount(); ++i) {
+            QTextBlock block = doc->findBlockByNumber(i);
+            if (block.text().trimmed() == "```") {
+                endBlock = i;
+                break;
+            }
+        }
+    }
+
+    if (startBlock != -1 && endBlock != -1 && currentBlockNumber > startBlock && currentBlockNumber < endBlock) {
+        isInCodeBlock = true;
+    }
+
+    copyCodeAction->setEnabled(isInCodeBlock);
+
+    menu.exec(chatDisplay->mapToGlobal(pos));
 }
