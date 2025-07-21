@@ -1,15 +1,15 @@
+// mainwindow.h
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 #include <QMainWindow>
 #include <QNetworkAccessManager>
-#include <QNetworkReply> // Включить QNetworkReply
+#include <QNetworkReply>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QTextEdit>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QComboBox>
@@ -27,9 +27,12 @@
 #include <QAction>
 #include <QFont>
 #include <QClipboard>
+#include <QScrollArea>
+#include <QLabel>
 
 #include "SyntaxHighlighter.h"
 #include "settingsdialog.h"
+#include "codeblockwidget.h"
 
 struct ModelData {
     QString id;
@@ -49,12 +52,9 @@ private slots:
     void showModelInfo();
     void openSettings();
     void startNewChat();
-    void copyCodeBlock();
-    void onCustomContextMenuRequested(const QPoint &pos);
 
-    // НОВЫЕ СЛОТЫ ДЛЯ СТРИМИНГА
-    void onStreamReadyRead(); // Обработка входящих данных по мере их поступления
-    void onStreamFinished();  // Обработка завершения стриминга
+    void onStreamReadyRead();
+    void onStreamFinished();
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -67,12 +67,13 @@ private:
     QString getSystemInfo();
     QString systemInfoContext;
 
-    QTextEdit *chatDisplay;
+    QVBoxLayout *chatContentLayout;
+    QScrollArea *chatScrollArea;
+
     QLineEdit *messageInput;
     QPushButton *sendButton;
     QComboBox *modelSelector;
     QNetworkAccessManager *networkManager;
-    CodeHighlighter *codeHighlighter;
 
     QMap<QString, ModelData> availableModels;
 
@@ -80,21 +81,25 @@ private:
     QModelIndex lastHoveredIndex;
 
     QAction *settingsAction;
-    QAction *copyCodeAction;
     QAction *newChatAction;
 
     QFont currentChatFont;
     int currentChatFontSize;
     QString currentTheme;
 
-    QString lastHoveredCodeBlockContent;
+    QNetworkReply *currentReply = nullptr;
+    QString replyBuffer;
+    bool firstChunkReceived = false;
 
-    QNetworkReply *currentReply = nullptr; // НОВОЕ: Указатель на текущий QNetworkReply для стриминга
-    QString replyBuffer; // НОВОЕ: Буфер для накопления частичных данных SSE
-    bool firstChunkReceived = false; // НОВОЕ: Флаг для первого полученного фрагмента (чтобы удалить "AI печатает...")
+    const QString OPENROUTER_API_KEY = "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"; // Замените на ваш API-ключ OpenRouter
+    const QString OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+    const QString OPENROUTER_CHAT_COMPLETIONS_URL = OPENROUTER_BASE_URL + "/chat/completions";
 
-    const QString OPENROUTER_API_KEY = "";
-    const QString OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+    // ИЗМЕНЕНО: Добавляем новый указатель на QLabel для временного отображения ответа AI
+    // Это будет тот QLabel, который будет обновляться в real-time
+    QLabel *aiResponseLabel = nullptr;
+    // ИЗМЕНЕНО: Обновленный addChatMessage для поддержки временного сообщения
+    void addChatMessage(const QString &sender, const QString &text, bool isCode = false, const QString &language = QString(), QLabel *targetLabel = nullptr);
 };
 
 #endif // MAINWINDOW_H

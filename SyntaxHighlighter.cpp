@@ -1,3 +1,4 @@
+// SyntaxHighlighter.cpp
 #include "SyntaxHighlighter.h"
 #include <QDebug>
 
@@ -19,6 +20,25 @@ CodeHighlighter::CodeHighlighter(QTextDocument *parent)
     codeBlockStartUnknown = QRegularExpression("^```(?!\\S)(?:\\s*(.*))?$"); // ``` в начале строки, не за которым следует не-пробельный символ
     codeBlockEnd = QRegularExpression("^```\\s*$"); // Закрывающий маркер по-прежнему ожидается на отдельной строке
 }
+
+// НОВЫЙ КОНСТРУКТОР: для использования с фиксированным языком (например, в CodeBlockWidget)
+CodeHighlighter::CodeHighlighter(QTextDocument *parent, BlockState fixedLanguageState)
+    : QSyntaxHighlighter(parent), m_fixedLanguageState(fixedLanguageState)
+{
+    setupFormats();
+    setupPythonRules();
+    setupCppRules();
+    setupJsonRules();
+    // Для этого конструктора регулярные выражения маркеров блоков кода не нужны,
+    // так как предполагается, что подсветчик применяется к одному блоку известного языка.
+    // Поэтому инициализируем их пустыми.
+    codeBlockStartPython = QRegularExpression();
+    codeBlockStartCpp = QRegularExpression();
+    codeBlockStartJson = QRegularExpression();
+    codeBlockStartUnknown = QRegularExpression();
+    codeBlockEnd = QRegularExpression();
+}
+
 
 // Настройка форматов (цвета и стили)
 void CodeHighlighter::setupFormats()
@@ -119,8 +139,8 @@ void CodeHighlighter::setupCppRules()
 
     // Комментарии
     cppRules.append({QRegularExpression("//[^\n]*"), commentFormat});
-    cppRules.append({QRegularExpression("/\\*.*\\*/"), commentFormat}); // Многострочные
-    cppRules.append({QRegularExpression("/\\*[^/]*(?:/[^\\*][^/]*)*\\*/"), commentFormat}); // Более надежное для многострочных
+    // Исправлено: используем правильный флаг для QRegularExpression
+    cppRules.append({QRegularExpression("/\\*.*\\*/", QRegularExpression::DotMatchesEverythingOption), commentFormat});
 
     // Функции
     cppRules.append({QRegularExpression("\\b[A-Za-z0-9_]+(?=\\()"), functionFormat});
@@ -175,13 +195,17 @@ void CodeHighlighter::setupJsonRules()
 // Основной метод для подсветки каждого блока текста
 void CodeHighlighter::highlightBlock(const QString &text)
 {
-    // 1. Получаем состояние предыдущего блока.
-    // ИСПРАВЛЕНО: Переименовали переменную, чтобы избежать конфликта имен с функцией previousBlockState()
+    // Если установлен фиксированный язык, просто применяем его правила ко всему блоку.
+    if (m_fixedLanguageState != PlainText) {
+        applyHighlightingRules(text, 0, m_fixedLanguageState);
+        return;
+    }
+
     BlockState lastBlockState = static_cast<BlockState>(previousBlockState());
     BlockState currentLanguageState = lastBlockState;
-    int codeContentOffset = 0; // Смещение, с которого начинается содержимое кода для подсветки
+    int codeContentOffset = 0;
 
-    // 2. Если мы в режиме PlainText, пытаемся найти начало блока кода.
+    // если в режиме PlainText, пытаемся найти начало блока кода.
     if (lastBlockState == PlainText) {
         QRegularExpressionMatch matchStartCpp = codeBlockStartCpp.match(text);
         QRegularExpressionMatch matchStartPython = codeBlockStartPython.match(text);
@@ -190,35 +214,36 @@ void CodeHighlighter::highlightBlock(const QString &text)
 
         if (matchStartCpp.hasMatch()) {
             currentLanguageState = CppCode;
-            setFormat(matchStartCpp.capturedStart(), matchStartCpp.capturedLength(), commentFormat); // Маркер как комментарий
-            if (matchStartCpp.lastCapturedIndex() >= 1 && !matchStartCpp.captured(1).isEmpty()) {
-                codeContentOffset = matchStartCpp.capturedStart(1); // Смещение для первой группы захвата (язык)
+            setFormat(matchStartCpp.capturedStart(), matchStartCpp.capturedLength(), commentFormat);
+            // Для C++/C++ язык находится в первой группе захвата, содержимое - во второй (если есть)
+            if (matchStartCpp.lastCapturedIndex() >= 2 && !matchStartCpp.captured(2).isEmpty()) {
+                codeContentOffset = matchStartCpp.capturedStart(2);
             } else {
-                codeContentOffset = text.length(); // Если нет языка, смещение до конца маркера
+                codeContentOffset = matchStartCpp.capturedEnd();
             }
         } else if (matchStartPython.hasMatch()) {
             currentLanguageState = PythonCode;
-            setFormat(matchStartPython.capturedStart(), matchStartPython.hasMatch() ? matchStartPython.capturedLength() : 0, commentFormat);
+            setFormat(matchStartPython.capturedStart(), matchStartPython.capturedLength(), commentFormat);
             if (matchStartPython.lastCapturedIndex() >= 1 && !matchStartPython.captured(1).isEmpty()) {
                 codeContentOffset = matchStartPython.capturedStart(1);
             } else {
-                codeContentOffset = text.length();
+                codeContentOffset = matchStartPython.capturedEnd();
             }
         } else if (matchStartJson.hasMatch()) {
             currentLanguageState = JsonCode;
-            setFormat(matchStartJson.capturedStart(), matchStartJson.hasMatch() ? matchStartJson.capturedLength() : 0, commentFormat);
+            setFormat(matchStartJson.capturedStart(), matchStartJson.capturedLength(), commentFormat);
             if (matchStartJson.lastCapturedIndex() >= 1 && !matchStartJson.captured(1).isEmpty()) {
                 codeContentOffset = matchStartJson.capturedStart(1);
             } else {
-                codeContentOffset = text.length();
+                codeContentOffset = matchStartJson.capturedEnd();
             }
         } else if (matchStartUnknown.hasMatch()) {
             currentLanguageState = UnknownCode;
-            setFormat(matchStartUnknown.capturedStart(), matchStartUnknown.hasMatch() ? matchStartUnknown.capturedLength() : 0, commentFormat);
+            setFormat(matchStartUnknown.capturedStart(), matchStartUnknown.capturedLength(), commentFormat);
             if (matchStartUnknown.lastCapturedIndex() >= 1 && !matchStartUnknown.captured(1).isEmpty()) {
                 codeContentOffset = matchStartUnknown.capturedStart(1);
             } else {
-                codeContentOffset = text.length();
+                codeContentOffset = matchStartUnknown.capturedEnd();
             }
         }
     }
@@ -230,17 +255,11 @@ void CodeHighlighter::highlightBlock(const QString &text)
             applyHighlightingRules(text.left(matchEnd.capturedStart()), 0, currentLanguageState);
             // Форматируем сам закрывающий маркер как комментарий
             setFormat(matchEnd.capturedStart(), matchEnd.capturedLength(), commentFormat);
-            currentLanguageState = PlainText; // Возвращаемся к обычному тексту
+            currentLanguageState = PlainText;
         }
     }
-    // Если ни одно из вышеперечисленных, currentLanguageState остается тем, чем было lastBlockState.
-    // codeContentOffset остается 0, что означает применение правил с начала строки.
 
-    // 4. Применяем правила подсветки на основе определенного языкового состояния.
-    // ИСПРАВЛЕНО: Уточняем условие, чтобы applyHighlightingRules вызывался только для содержимого кода.
     if (currentLanguageState != PlainText && currentLanguageState == lastBlockState) {
-        // Применяем правила ко всей строке, так как мы находимся внутри блока кода
-        // и эта строка не является его началом или концом.
         applyHighlightingRules(text, 0, currentLanguageState);
     } else if (currentLanguageState != PlainText && currentLanguageState != lastBlockState) {
         // Это строка, которая содержит открывающий маркер. Применяем правила от смещения.
