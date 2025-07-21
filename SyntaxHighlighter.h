@@ -1,3 +1,4 @@
+// SyntaxHighlighter.h
 #ifndef SYNTAXHIGHLIGH_H
 #define SYNTAXHIGHLIGH_H
 
@@ -23,6 +24,9 @@ public:
     };
 
     CodeHighlighter(QTextDocument *parent = nullptr);
+    // новый конструктор для использования с фиксированным языком (например, в CodeBlockWidget)
+    CodeHighlighter(QTextDocument *parent, BlockState fixedLanguageState);
+
 
 protected:
     // Основной метод для подсветки каждого блока текста
@@ -64,6 +68,9 @@ private:
 
     // Приватный метод для применения правил подсветки к тексту в зависимости от текущего состояния блока.
     void applyHighlightingRules(const QString &text, int offset, BlockState languageState);
+
+    // НОВОЕ: Для указания фиксированного языка, если подсветчик используется для одного блока кода.
+    BlockState m_fixedLanguageState = PlainText;
 };
 
 #endif // SYNTAXHIGHLIGH_H
